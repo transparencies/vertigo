@@ -2,7 +2,7 @@ use std::cmp::PartialEq;
 use vertigo::{
     DomDriver,
     computed::{Computed, Dependencies, Value},
-    router::HashRouter,
+    router::{Router, RouterType},
 };
 
 use super::sudoku;
@@ -25,7 +25,7 @@ pub struct State {
     pub github_explorer: Computed<github_explorer::State>,
     pub game_of_life: Computed<game_of_life::State>,
 
-    hash_router: HashRouter,
+    hash_router: Router,
 }
 
 impl State {
@@ -35,7 +35,7 @@ impl State {
 
         let route: Value<Route> = root.new_value(Route::new(driver.get_hash_location(), &game_of_life));
 
-        let hash_router = HashRouter::new(driver, route.clone(), {
+        let hash_router = Router::new(RouterType::Hash, driver, route.clone(), {
             let route = route.clone();
             let game_of_life = game_of_life.clone();
 

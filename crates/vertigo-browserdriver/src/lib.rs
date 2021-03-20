@@ -13,7 +13,7 @@ use vertigo::{
     EventCallback,
     FetchError,
     FetchMethod,
-    HashRoutingReceiver,
+    RoutingReceiver,
     RealDomId,
     utils::{
         BoxRefCell,
@@ -456,6 +456,18 @@ impl DomDriverBrowserInner {
         let history = self.window.history().expect("Can't read history from window");
         history.push_state_with_url(&JsValue::from_str(""), "", Some(&path)).expect("Can't push state to history");
     }
+
+    fn get_browser_location(&self) -> (String, String) {
+        (
+            self.window.location().pathname().expect("Can't read path part from location bar"),
+            self.window.location().search().expect("Can't read search part from location bar"),
+        )
+    }
+
+    fn push_browser_location(&self, path: &str) {
+        let history = self.window.history().expect("Can't read history from window");
+        history.push_state_with_url(&JsValue::from_str(""), "", Some(&path)).expect("Can't push state to history");
+    }
 }
 
 
@@ -537,6 +549,8 @@ impl DomDriverTrait for DomDriverBrowser {
         fetch::fetch(method, url, headers, body)
     }
 
+    /* HashRouter methods */
+
     fn get_hash_location(&self) -> String {
         self.driver.get(|state| {
             let mut path = state.get_hash_location();
@@ -561,7 +575,7 @@ impl DomDriverTrait for DomDriverBrowser {
         });
     }
 
-    fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> HashRoutingReceiver {
+    fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> RoutingReceiver {
         let myself = self.clone();
 
         let on_popstate = Closure::<dyn Fn(Event)>::new({
@@ -576,14 +590,48 @@ impl DomDriverTrait for DomDriverBrowser {
             on_popstate.forget();
         });
 
-        HashRoutingReceiver::new(self.clone())
+        RoutingReceiver::new(self.clone())
     }
 
-    fn clear_hash_route_callback(&self) {
+    fn clear_route_callback(&self) {
         self.driver.change_no_params(|state| {
             state.window.set_onpopstate(None);
         });
     }
+
+    /* BrowserRouter methods */
+
+    fn get_browser_location(&self) -> (String, String) {
+        self.driver.get(|state| {
+            state.get_browser_location()
+        })
+    }
+
+    fn push_browser_location(&self, path: &str) {
+        self.driver.change(path, |state, path| {
+            state.push_browser_location(path);
+        });
+    }
+
+    fn on_browser_route_change(&self, on_change: Box<dyn Fn((String, String))>) -> RoutingReceiver {
+        let myself = self.clone();
+
+        let on_popstate = Closure::<dyn Fn(Event)>::new({
+            move |_: Event| {
+                let path = myself.get_browser_location();
+                on_change(path);
+            }
+        });
+
+        self.driver.change(on_popstate, |state, on_popstate| {
+            state.window.set_onpopstate(Some(on_popstate.as_ref().unchecked_ref()));
+            on_popstate.forget();
+        });
+
+        RoutingReceiver::new(self.clone())
+    }
+
+    /* Interval */
 
     fn set_interval(&self, time: u32, func: Box<dyn Fn()>) -> DropResource {
         let drop_resource = crate::set_interval::Interval::new(time, func);

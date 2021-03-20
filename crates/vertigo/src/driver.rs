@@ -79,7 +79,7 @@ impl EventCallback {
     }
 }
 
-const SHOW_LOG: bool = false;
+const SHOW_LOG: bool = true;
 
 pub trait DomDriverTrait {
     fn create_node(&self, id: RealDomId, name: &'static str);
@@ -95,8 +95,12 @@ pub trait DomDriverTrait {
 
     fn get_hash_location(&self) -> String;
     fn push_hash_location(&self, path: &str);
-    fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> HashRoutingReceiver;
-    fn clear_hash_route_callback(&self);
+    fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> RoutingReceiver;
+    fn clear_route_callback(&self);
+
+    fn get_browser_location(&self) -> (String, String);
+    fn push_browser_location(&self, path: &str);
+    fn on_browser_route_change(&self, on_change: Box<dyn Fn((String, String))>) -> RoutingReceiver;
 
     fn set_interval(&self, time: u32, func: Box<dyn Fn()>) -> DropResource;
 }
@@ -183,7 +187,7 @@ impl DomDriver {
                 show_log(format!("insert_before child={} refId=None", child));
             }
         }
-        
+
         self.driver.insert_before(parent, child, ref_id);
     }
 
@@ -202,6 +206,8 @@ impl DomDriver {
         self.driver.fetch(method, url, headers, body)
     }
 
+    /* HashRouter methods */
+
     pub fn get_hash_location(&self) -> String {
         show_log("get_location".to_string());
         self.driver.get_hash_location()
@@ -212,14 +218,34 @@ impl DomDriver {
         self.driver.push_hash_location(&path)
     }
 
-    pub fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> HashRoutingReceiver {
+    pub fn on_hash_route_change(&self, on_change: Box<dyn Fn(String)>) -> RoutingReceiver {
         show_log("on_route_change".to_string());
         self.driver.on_hash_route_change(on_change)
     }
 
-    pub fn clear_hash_route_callback(&self) {
-        self.driver.clear_hash_route_callback()
+    pub fn clear_route_callback(&self) {
+        self.driver.clear_route_callback()
     }
+
+    /* BrowserRouter methods */
+
+    pub fn get_browser_location(&self) -> (String, String) {
+        let locat = self.driver.get_browser_location();
+        show_log(format!("get_location: ({}, {})", locat.0, locat.1));
+        locat
+    }
+
+    pub fn push_browser_location(&self, path: String) {
+        show_log(format!("set_location {}", path));
+        self.driver.push_browser_location(&path)
+    }
+
+    pub fn on_browser_route_change(&self, on_change: Box<dyn Fn((String, String))>) -> RoutingReceiver {
+        show_log("on_route_change".to_string());
+        self.driver.on_browser_route_change(on_change)
+    }
+
+    /* Interval */
 
     pub fn set_interval<F: Fn() + 'static>(&self, time: u32, func: F) -> DropResource{
         self.driver.set_interval(time, Box::new(func))
@@ -227,11 +253,11 @@ impl DomDriver {
 }
 
 #[derive(PartialEq)]
-pub struct HashRoutingReceiver {
+pub struct RoutingReceiver {
     driver: EqBox<Rc<dyn DomDriverTrait>>,
 }
 
-impl HashRoutingReceiver {
+impl RoutingReceiver {
     pub fn new<T: DomDriverTrait + 'static>(driver: T) -> Self {
         Self {
             driver: EqBox::new(Rc::new(driver)),
@@ -239,8 +265,8 @@ impl HashRoutingReceiver {
     }
 }
 
-impl Drop for HashRoutingReceiver {
+impl Drop for RoutingReceiver {
     fn drop(&mut self) {
-        self.driver.clear_hash_route_callback()
+        self.driver.clear_route_callback()
     }
 }

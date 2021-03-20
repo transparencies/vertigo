@@ -2,9 +2,15 @@ use std::rc::Rc;
 
 use crate::{
     computed::{Client, Value},
-    DomDriver, HashRoutingReceiver,
+    DomDriver, RoutingReceiver,
     utils::BoxRefCell,
 };
+
+#[derive(PartialEq)]
+pub enum RouterType {
+    Hash,
+    Browser
+}
 
 #[derive(PartialEq, Clone, Copy)]
 enum Direction {
@@ -14,15 +20,15 @@ enum Direction {
 }
 
 #[derive(PartialEq)]
-pub struct HashRouter {
+pub struct Router {
     sender: Client,
-    receiver: HashRoutingReceiver,
+    receiver: RoutingReceiver,
 }
 
-impl HashRouter {
-    /// Create new HashRouter which sets route value upon hash change in browser bar.
+impl Router {
+    /// Create new Router which sets route value upon hash/browser change in browser bar.
     /// If callback is provided then it is fired instead.
-    pub fn new<T>(driver: &DomDriver, route: Value<T>, callback: Box<dyn Fn(String)>) -> Self
+    pub fn new<T>(rtype: RouterType, driver: &DomDriver, route: Value<T>, callback: Box<dyn Fn(String)>) -> Self
     where
         T: PartialEq + ToString
     {
@@ -38,7 +44,10 @@ impl HashRouter {
                     Direction::Loading =>
                         direction.change_no_params(|state| *state = Direction::Pushing),
                     Direction::Pushing =>
-                        driver.push_hash_location(route.to_string()),
+                        match rtype {
+                            RouterType::Hash => driver.push_hash_location(route.to_string()),
+                            RouterType::Browser => driver.push_browser_location(route.to_string()),
+                        },
                     _ => ()
                 }
             }
