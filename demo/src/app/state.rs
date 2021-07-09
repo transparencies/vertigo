@@ -46,7 +46,7 @@ impl State {
         let state = State {
             root: root.clone(),
             route,
-            main: super::main::MainState::new(&root),
+            main: super::main::MainState::new(&root, driver.clone()),
             counters: CountersState::new(&root),
             sudoku: sudoku::Sudoku::new(root),
             input: input::State::new(&root),

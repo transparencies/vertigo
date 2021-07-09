@@ -1,27 +1,57 @@
-use vertigo::{
-    VDomElement,
-    Css,
-    computed::{
+use vertigo::{DomDriver, VDomElement, computed::{
         Value,
         Computed,
         Dependencies
-    },
-};
-use vertigo_html::{html, css, css_fn, css_fn_push};
+    }, utils::DropResource};
+
+use vertigo_html::{html, css_fn, css_fn_push};
 
 mod spinner;
 
 use spinner::spinner;
 
 #[derive(PartialEq)]
-pub struct MainState {
+pub struct Animacja {
     pub value: Value<u32>,
+    _timer: DropResource,
+}
+
+impl Animacja {
+    pub fn new(root: &Dependencies, driver: &DomDriver) -> Animacja {
+        let value = root.new_value(0);
+
+        let timer = {
+            let value = value.clone();
+            driver.set_interval(1000, move || {
+                let val = value.get_value();
+                value.set_value(*val + 1);
+                log::info!("tik");
+            })
+        };
+
+        Animacja { 
+            value,
+            _timer: timer,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub struct MainState {
+    driver: DomDriver,
+    pub value: Value<u32>,
+    pub animacja: Value<Animacja>,
 }
 
 impl MainState {
-    pub fn new(root: &Dependencies) -> Computed<MainState> {
+    pub fn new(root: &Dependencies, driver: DomDriver) -> Computed<MainState> {
+        let startowa_animacja = Animacja::new(root, &driver);
+        let animacja = root.new_value(startowa_animacja);
+
         root.new_computed_from(MainState {
-            value: root.new_value(33),
+            value: root.new_value(30),
+            driver,
+            animacja,
         })
     }
 
@@ -35,14 +65,6 @@ impl MainState {
         self.value.set_value(*rr - 1);
     }
 
-}
-
-fn css_footer(show_color: bool) -> Css {
-    let color = if show_color { "green" } else { "blue" };
-    css!("
-        background-color: yellow;
-        color: { color };
-    ")
 }
 
 css_fn! { css_bg, "
@@ -68,48 +90,78 @@ pub fn main_render(state: &Computed<MainState>) -> VDomElement {
     };
 
     let on_up = {
+        let app_state = state.clone();
         move || {
             log::info!("on click");
-            state.increment();
+            app_state.increment();
         }
     };
 
-    let show_color = value % 2 == 0;
-
-    let footer_dom = if value % 10 == 0 {
-        html! {
-            <div>
-                "jakis footer" {value % 2} {value % 3} "- BEZKLASIE"
-            </div>
+    let wyzeruj = {
+        let app_state = state.clone();
+        move || {
+            app_state.value.set_value(0);
         }
+    };
+
+    let ustaw_sto = {
+        let app_state = state.clone();
+        move || {
+            app_state.value.set_value(100);
+        }
+    };
+
+    let podwoj_liczbe = {
+        let app_state = state.clone();
+        move || {
+            let value = app_state.value.get_value();
+            app_state.value.set_value(*value * 2);
+        }
+    };
+
+    let pomniejsz_liczbe = {
+        let app_state = state.clone();
+        move || {
+            let value = app_state.value.get_value();
+            app_state.value.set_value(*value / 2);
+        }
+    };
+
+    let wynik = if value > 35 {
+        format!("Weronika {}", value * 20)
     } else {
-        html! {
-            <div css={css_footer(show_color)}>
-                "jakis footer" {value % 2} {value % 3}
-            </div>
-        }
+        format!("Internet ==> {}", 4 * value)
     };
+
+    let value2 = value * 2;
+    let value_polowka = value / 2;
+
+    let curr = state.animacja.get_value().value.get_value();
+    let curr = *curr;
 
     html! {
         <div aaa="one" bbb="two">
             "Abudabi"
             <div css={css_bg()}>
-                {$ if value > 35 { "terefere kuku" } else { "bla bla bla" } $}
+                { wynik }
                 { spinner() }
+                { curr }
             </div>
-            <div css={css_bg()} onClick={on_up.clone()}>
-                "Actual value = " { value }
+            <div css={css_bg()} onClick={pomniejsz_liczbe}>
+                "Actual value = " { value } " Jak klikniesz, to zmniejszę dwa razy --> " { value_polowka }
             </div>
-            <div css={css_bg()}>
-                "Actual value: " { value }
+            <div css={css_bg()} onClick={podwoj_liczbe}>
+                "Actual value: " { value } " Jak klikniesz, to podwoję tą wartość --> " {value2}
             </div>
             <div css={css_button()} onClick={on_up}>
-                "up"
+                "Zwiększ liczbę"
             </div>
             <div css={css_button()} onClick={on_down}>
-                "down"
+                "Zmiejsz liczbę"
             </div>
-            <p>{ footer_dom }</p>
+            <button onClick={wyzeruj}>"Wyzeruj"</button>
+            <button onClick={ustaw_sto}>"Ustaw stoo"</button>
         </div>
     }
 }
+//            
